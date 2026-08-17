@@ -208,10 +208,31 @@
   async function startSystemAudio() {
     if (sysStream) return;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      stream.getVideoTracks().forEach((t) => t.stop()); // we only want the audio
+      let stream;
+      if (cue.platform !== 'darwin') {
+        // Windows: use desktopCapturer-backed constraints so we don't get a
+        // user-facing picker dialog, and always get the loopback audio track.
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            mandatory: {
+              chromeMediaSource: 'desktop'
+            }
+          },
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop'
+            }
+          }
+        });
+        // Stop the video track — we only want audio
+        stream.getVideoTracks().forEach((t) => t.stop());
+      } else {
+        // macOS: use getDisplayMedia with loopback (handled by setDisplayMediaRequestHandler)
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        stream.getVideoTracks().forEach((t) => t.stop());
+      }
       const tracks = stream.getAudioTracks();
-      if (!tracks.length) { cue.log('system audio: no loopback track (macOS loopback unsupported here)'); stream.getTracks().forEach((t) => t.stop()); return; }
+      if (!tracks.length) { cue.log('system audio: no loopback track'); stream.getTracks().forEach((t) => t.stop()); return; }
       sysStream = stream;
       sysCtx = new AudioContext({ sampleRate: 16000 });
       await sysCtx.audioWorklet.addModule('./pcm-processor.js');
@@ -280,6 +301,7 @@
     $('#key-anthropic').value = settings.apiKeys.anthropic || '';
     $('#key-gemini').value = settings.apiKeys.gemini || '';
     $('#key-nvidia').value = settings.apiKeys.nvidia || '';
+    $('#key-groq').value = settings.apiKeys.groq || '';
     $('#resume-context').value = settings.resumeContext || '';
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
     $('#model-fast').value = m.fast; $('#model-smart').value = m.smart;
@@ -293,8 +315,8 @@
   });
   function statusText() {
     const k = settings.apiKeys;
-    const has = [k.openai && 'OpenAI', k.anthropic && 'Anthropic', k.gemini && 'Gemini', k.nvidia && 'Nvidia'].filter(Boolean);
-    const stt = k.openai ? 'Whisper' : (k.gemini ? 'Gemini' : 'none');
+    const has = [k.openai && 'OpenAI', k.anthropic && 'Anthropic', k.gemini && 'Gemini', k.nvidia && 'Nvidia', k.groq && 'Groq'].filter(Boolean);
+    const stt = k.groq ? 'Groq Whisper' : (k.openai ? 'Whisper' : (k.gemini ? 'Gemini' : 'none'));
     return 'Active: ' + settings.provider + ' · keys: ' + (has.join(', ') || 'none set') + ' · transcription: ' + stt;
   }
   document.querySelectorAll('#provider-seg button').forEach((b) => b.addEventListener('click', () => {
@@ -309,6 +331,7 @@
     settings.apiKeys.anthropic = $('#key-anthropic').value.trim();
     settings.apiKeys.gemini = $('#key-gemini').value.trim();
     settings.apiKeys.nvidia = $('#key-nvidia').value.trim();
+    settings.apiKeys.groq = $('#key-groq').value.trim();
     settings.resumeContext = $('#resume-context').value.trim();
     if (!settings.models[settings.provider]) settings.models[settings.provider] = {};
     settings.models[settings.provider].fast = $('#model-fast').value.trim();
@@ -467,7 +490,14 @@
         { label: 'Open Microphone settings', action: () => cue.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone') },
         { label: 'Open Screen Recording settings', action: () => cue.openPane('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture') }
       ]
-    }] : []),
+    }] : [{
+      icon: '🔐',
+      title: 'Allow cue to see & hear',
+      body: 'Windows will ask you to allow <strong>Microphone</strong> access the first time you start listening — click <strong>Yes</strong> when prompted.<br><br>If it was previously denied, fix it here:<ul><li>Settings → Privacy & Security → <strong>Microphone</strong> → turn on access for <strong>cue</strong></li></ul>Screen capture works automatically on Windows — no extra grant needed.',
+      buttons: [
+        { label: 'Open Windows Privacy Settings', action: () => cue.openPane('ms-settings:privacy-microphone') }
+      ]
+    }]),
     {
       icon: '🔑',
       title: 'Connect an AI provider',

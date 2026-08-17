@@ -1,5 +1,5 @@
 // Full-resolution screenshot via desktopCapturer (main process).
-// First call triggers the macOS Screen-Recording permission prompt for the app.
+// Works on macOS and Windows — no native extensions needed.
 const { desktopCapturer, screen } = require('electron');
 
 async function captureScreenshot() {

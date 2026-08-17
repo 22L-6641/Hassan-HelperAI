@@ -57,7 +57,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
-    "@google/genai": "^0.3.0",
+    "@google/genai": "^2.13.0",
+    "@google/generative-ai": "^0.24.1",
     "lucide-static": "^0.468.0",
     "openai": "^4.73.0"
   }

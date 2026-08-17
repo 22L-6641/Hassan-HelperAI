@@ -166,13 +166,17 @@ async function runFeature(mode, userText) {
     let imageDataUrl = null;
     if (def.needsScreen) {
       if (DEBUG) console.log('[DEBUG MAIN] Feature needs screen. Capturing screenshot...');
-      try { 
-        imageDataUrl = await captureScreenshot(); 
+      try {
+        imageDataUrl = await captureScreenshot();
         if (DEBUG) console.log('[DEBUG MAIN] Screenshot captured successfully (length:', imageDataUrl.length, ')');
       }
-      catch (e) { 
+      catch (e) {
         if (DEBUG) console.error('[DEBUG MAIN] Screenshot capture failed:', e);
-        send('status', { message: 'Screen capture needs permission — grant Screen Recording to cue in System Settings.' }); 
+        send('status', {
+          message: process.platform === 'darwin'
+            ? 'Screen capture needs permission — grant Screen Recording to cue in System Settings.'
+            : 'Screen capture failed — make sure no other app is blocking screen access.'
+        });
       }
     }
 
@@ -203,7 +207,7 @@ ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text));
 ipcMain.on('mic:pcm', (_e, arrayBuffer) => { if (state.capturing) buffers.you.push(Buffer.from(arrayBuffer)); });
 ipcMain.on('system:pcm', (_e, arrayBuffer) => { if (state.capturing) buffers.them.push(Buffer.from(arrayBuffer)); });
 ipcMain.on('mouse:ignore', (_e, v) => { if (win) win.setIgnoreMouseEvents(!!v, { forward: true }); });
-ipcMain.on('open-pane', (_e, url) => { shell.openExternal(url).catch(() => {}); });
+ipcMain.on('open-pane', (_e, url) => { shell.openExternal(url).catch(() => { }); });
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg));
 
 // -------- shortcuts --------
@@ -257,18 +261,23 @@ function registerShortcuts() {
 
 // -------- lifecycle --------
 app.whenReady().then(() => {
-  if (app.dock) app.dock.hide();
+  // app.dock is macOS-only; guard it so Windows doesn't throw
+  if (app.dock && typeof app.dock.hide === 'function') app.dock.hide();
 
   const allowMedia = (permission) => permission === 'media' || permission === 'microphone' || permission === 'audioCapture' || permission === 'display-capture';
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowMedia(permission)));
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowMedia(permission));
 
-  // System-audio loopback for getDisplayMedia: hand back a screen source with 'loopback'
-  // audio so the renderer can capture what's playing (Zoom/Meet) using cue's own grant.
+  // System-audio loopback for getDisplayMedia: hand back a screen source with loopback audio.
+  // On macOS the 'loopback' string triggers ScreenCaptureKit audio.
+  // On Windows, Electron/Chromium supports loopback via the same 'loopback' flag (Win10 2004+).
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      if (sources.length) callback({ video: sources[0], audio: 'loopback' });
-      else callback();
+      if (sources.length) {
+        callback({ video: sources[0], audio: 'loopback' });
+      } else {
+        callback();
+      }
     }).catch(() => callback());
   }, { useSystemPicker: false });
 

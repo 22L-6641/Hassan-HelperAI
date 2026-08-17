@@ -35,7 +35,7 @@
 
         <div id="composer">
           <div id="input-area">
-            <div id="placeholder">Ask about your screen or conversation, or <span class="keycap">⌘</span><span class="keycap">⏎</span> for Assist</div>
+            <div id="placeholder">Ask about your screen or conversation, or use the Assist shortcut</div>
             <textarea id="input" rows="1" spellcheck="false"></textarea>
           </div>
           <div id="composer-bottom">
@@ -65,13 +65,15 @@
           <button data-provider="anthropic">Anthropic</button>
           <button data-provider="gemini">Gemini</button>
           <button data-provider="nvidia">Nvidia</button>
+          <button data-provider="groq">Groq ⚡</button>
         </div>
 
         <label class="s-label">API keys <span class="s-hint">stored locally in cue-data.json</span></label>
         <div class="s-field"><span>OpenAI</span><input id="key-openai" type="password" placeholder="sk-..." autocomplete="off" /></div>
         <div class="s-field"><span>Anthropic</span><input id="key-anthropic" type="password" placeholder="sk-ant-..." autocomplete="off" /></div>
-        <div class="s-field"><span>Gemini</span><input id="key-gemini" type="password" placeholder="AIza..." autocomplete="off" /></div>
+        <div class="s-field"><span>Gemini</span><input id="key-gemini" type="password" placeholder="AIza... or AQ...." autocomplete="off" /></div>
         <div class="s-field"><span>Nvidia</span><input id="key-nvidia" type="password" placeholder="nvapi-..." autocomplete="off" /></div>
+        <div class="s-field"><span>Groq ⚡</span><input id="key-groq" type="password" placeholder="gsk_..." autocomplete="off" /></div>
 
         <label class="s-label" for="resume-context">Résumé / professional background <span class="s-hint">stored locally; sent to your selected provider with each request</span></label>
         <textarea id="resume-context" class="s-textarea" maxlength="12000" placeholder="Paste your résumé or professional background here. cue will use it as the factual source for career-related answers."></textarea>

@@ -1,4 +1,4 @@
-const DEBUG = false; // Set to false to disable debug logging
+const DEBUG = true; // Set to false to disable debug logging
 // LLM factory — OpenAI / Anthropic / Gemini behind one streaming interface.
 // stream({ system, turns:[{role,text}], imageDataUrl, maxTokens, onToken }) -> Promise<fullText>
 
@@ -69,40 +69,68 @@ async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, max
   }
 }
 
+// LLM models tried in order on quota/overload errors
+const GEMINI_LLM_MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-image',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+];
+
 async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
   if (DEBUG) console.log('[DEBUG LLM] streamGemini called', { model, hasImage: !!imageDataUrl, maxTokens });
   const { GoogleGenAI } = require('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
+
   const contents = turns.map((t, i) => {
     const last = i === turns.length - 1;
-    const parts = [{ text: t.text }];
+    const parts = [{ text: t.text || '' }];
     if (last && imageDataUrl && t.role === 'user') {
       const img = stripDataUrl(imageDataUrl);
       if (img) parts.push({ inlineData: { mimeType: img.mime, data: img.b64 } });
     }
     return { role: t.role === 'assistant' ? 'model' : 'user', parts };
   });
-  if (DEBUG) console.log('[DEBUG LLM] streamGemini sending request to Google SDK with contents count:', contents.length);
-  try {
-    const stream = await ai.models.generateContentStream({
-      model, contents, config: { systemInstruction: system }
-    });
-    let full = '';
-    let lastFinishReason = 'UNKNOWN';
-    for await (const chunk of stream) {
-      const t = chunk && chunk.text;
-      if (t) { full += t; onToken(t); }
-      if (chunk && chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
-        lastFinishReason = chunk.candidates[0].finishReason;
+
+  // Build the list: try the configured model first, then fallbacks
+  const modelsToTry = [model, ...GEMINI_LLM_MODELS.filter(m => m !== model)];
+  let lastErr = null;
+
+  for (const tryModel of modelsToTry) {
+    try {
+      if (DEBUG) console.log('[DEBUG LLM] streamGemini trying model:', tryModel);
+      const responseStream = await ai.models.generateContentStream({
+        model: tryModel,
+        contents,
+        config: { systemInstruction: system }
+      });
+      let full = '';
+      for await (const chunk of responseStream) {
+        const t = chunk.text; // string getter in v2.x
+        if (t) { full += t; onToken(t); }
       }
+      if (DEBUG) console.log('[DEBUG LLM] streamGemini finished with', tryModel, '— length:', full.length);
+      return full;
+    } catch (err) {
+      const msg = (err && err.message) || '';
+      const is429 = err.status === 429 || msg.includes('429') || msg.includes('Too Many');
+      const is503 = err.status === 503 || msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('high demand');
+      const is404 = err.status === 404 || msg.includes('404') || msg.includes('not found');
+      if (is429 || is503 || is404) {
+        if (DEBUG) console.log('[DEBUG LLM] model', tryModel, 'failed (', err.status || msg.slice(0, 40), ') — trying next model...');
+        lastErr = err;
+        continue; // try next model
+      }
+      if (DEBUG) console.error('[DEBUG LLM] streamGemini fatal error:', err);
+      throw err;
     }
-    if (DEBUG) console.log('[DEBUG LLM] streamGemini finished successfully, total length:', full.length, 'finishReason:', lastFinishReason);
-    return full;
-  } catch (err) {
-    if (DEBUG) console.error('[DEBUG LLM] streamGemini error:', err);
-    throw err;
   }
+  if (DEBUG) console.error('[DEBUG LLM] all Gemini models exhausted');
+  throw lastErr || new Error('All Gemini models are currently unavailable (quota/overload)');
 }
+
 
 function createLLM(settings) {
   const provider = settings.provider;
@@ -125,6 +153,7 @@ function createLLM(settings) {
       const args = { apiKey, model, maxTokens, ...params };
       if (provider === 'openai') return streamOpenAI(args);
       if (provider === 'nvidia') return streamOpenAI({ ...args, baseURL: 'https://integrate.api.nvidia.com/v1' });
+      if (provider === 'groq')   return streamOpenAI({ ...args, baseURL: 'https://api.groq.com/openai/v1' });
       if (provider === 'anthropic') return streamAnthropic(args);
       if (provider === 'gemini') return streamGemini(args);
       throw new Error('unknown provider: ' + provider);

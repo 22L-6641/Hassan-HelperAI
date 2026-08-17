@@ -10,12 +10,13 @@ const DEFAULTS = {
   smart: false,
   resumeContext: '',
   shortcuts: { assist: 'CommandOrControl+Return' },
-  apiKeys: { openai: '', anthropic: '', gemini: '', deepgram: '', nvidia: '' },
+  apiKeys: { openai: '', anthropic: '', gemini: '', deepgram: '', nvidia: '', groq: '' },
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
     anthropic: { fast: 'claude-3-5-haiku-latest', smart: 'claude-3-5-sonnet-latest' },
-    gemini: { fast: 'gemini-2.5-flash', smart: 'gemini-2.5-pro' },
-    nvidia: { fast: 'meta/llama-3.2-11b-vision-instruct', smart: 'meta/llama-3.2-90b-vision-instruct' }
+    gemini: { fast: 'gemini-3.5-flash', smart: 'gemini-3.5-flash' },
+    nvidia: { fast: 'meta/llama-3.2-11b-vision-instruct', smart: 'meta/llama-3.2-90b-vision-instruct' },
+    groq:  { fast: 'llama-3.1-8b-instant', smart: 'llama-3.3-70b-versatile' }
   }
 };
 
@@ -40,7 +41,7 @@ function load() {
   
   // Auto-switch provider if the current one has no key, but another one does.
   if (!data.apiKeys[data.provider]) {
-    const validProviders = ['openai', 'anthropic', 'gemini', 'nvidia'];
+    const validProviders = ['openai', 'anthropic', 'gemini', 'nvidia', 'groq'];
     const active = validProviders.find(p => data.apiKeys[p]);
     if (active) {
       data.provider = active;
